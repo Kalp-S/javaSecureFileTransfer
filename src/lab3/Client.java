@@ -106,7 +106,7 @@ public class Client {
             cipherS = KeyFunctions.getDESCipher(PUb, K_s.getBytes());
             // send to client the length of cipher in bytes, then the cipher.
             System.out.println("Send secret session key which is a DES key"
-                    + " created from the string TRISTANCOLLINGS\n");
+                    + " created\n");
             KeyFunctions.printMessageSent(K_s, 
                         cipherS);
             out.writeInt(cipherS.length);
