@@ -22,9 +22,27 @@ public class Client {
         String host = "localhost";
         String PU_b = "NETWORK SECURITY";
         String K_s = "KALPSHAHKALPSHAH";
-        String filePath = "C:\\Users\\kalps\\Desktop\\Courses\\COE 817\\lab3\\coe817lab3\\src\\coe817lab3\\client_files\\"
-                + "input.jpg";
         int port = 8080;
+        String defaultWinPath = "C:\\Users\\kalps\\Desktop\\Courses\\COE 817\\lab3\\coe817lab3\\src\\coe817lab3\\client_files\\"
+                + "input.jpg";
+        String filePath = defaultWinPath;
+        if (args.length > 0 && !args[0].isEmpty()) {
+            filePath = args[0];
+        } else if (!new File(defaultWinPath).exists()) {
+            File rel1 = new File("src/lab3/client_files/input.jpg");
+            File rel2 = new File("client_files/input.jpg");
+            if (rel1.exists()) {
+                filePath = rel1.getPath();
+            } else if (rel2.exists()) {
+                filePath = rel2.getPath();
+            }
+        }
+        if (args.length > 1 && !args[1].isEmpty()) {
+            host = args[1];
+        }
+        if (args.length > 2) {
+            try { port = Integer.parseInt(args[2]); } catch (NumberFormatException ignored) {}
+        }
         SecretKey sessionKey;
         SecretKey PUb;
         String plainText;

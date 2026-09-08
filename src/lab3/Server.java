@@ -24,6 +24,15 @@ public class Server {
     public static void main(String [] args)
     {
         int port = 8080;
+        String outputPath = null;
+        for (String arg : args) {
+            if (arg == null || arg.trim().isEmpty()) continue;
+            try {
+                port = Integer.parseInt(arg.trim());
+            } catch (NumberFormatException e) {
+                outputPath = arg.trim();
+            }
+        }
         String id = "RESPONDER B";
         String PU_a = "NETWORK SECURITY";
         String ks = "KALPSHAHKALPSHAH";
@@ -169,9 +178,23 @@ public class Server {
                     temp);
                 ByteArrayInputStream bi = new ByteArrayInputStream(plainBytes);
                 BufferedImage image = ImageIO.read(bi);
-                File file = new File("C:\\Users\\kalps\\Desktop\\Courses\\COE 817\\lab3\\coe817lab3\\src\\coe817lab3\\server_files\\"
-                + "output.jpg");
-                ImageIO.write(image,"jpg",file);
+                String defaultWinPath = "C:\\Users\\kalps\\Desktop\\Courses\\COE 817\\lab3\\coe817lab3\\src\\coe817lab3\\server_files\\"
+                + "output.jpg";
+                String targetPath = "src/lab3/server_files/output.jpg";
+                if (outputPath != null && !outputPath.isEmpty()) {
+                    targetPath = outputPath;
+                } else {
+                    File winFile = new File(defaultWinPath);
+                    if (winFile.getParentFile() != null && winFile.getParentFile().exists()) {
+                        targetPath = defaultWinPath;
+                    }
+                }
+                File file = new File(targetPath);
+                if (file.getParentFile() != null) {
+                    file.getParentFile().mkdirs();
+                }
+                ImageIO.write(image, "jpg", file);
+                System.out.println("Image successfully received and saved to: " + file.getAbsolutePath());
             in.close();
             out.close();
             server.close();
