@@ -1,46 +1,54 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package lab3;
 
-/**
- *
- * @author kalps
- */
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 
+/**
+ * File I/O and integrity verification helper functions.
+ *
+ * @author Kalp Shah
+ */
 public class FileFunctions {
+
+    /**
+     * Reads the entire content of a file into a byte array safely.
+     */
     public static byte[] getFile(String filepath) {
+        if (filepath == null) return new byte[0];
+        File file = new File(filepath).getAbsoluteFile();
+        if (!file.exists() || !file.isFile()) {
+            System.err.println("[WARN] File not found or is not a regular file: " + filepath);
+            return new byte[0];
+        }
 
-        File f = new File(filepath).getAbsoluteFile();
-        InputStream inputS = null;
-        try {
-            inputS = new FileInputStream(f);
-        } catch (FileNotFoundException e2) {
-            // TODO Auto-generated catch block
-            e2.printStackTrace();
-        }
-        byte[] imageBytes = null;
-        try {
-            imageBytes = new byte[inputS.available()];
-        } catch (IOException e1) {
-            // TODO Auto-generated catch block
-            e1.printStackTrace();
-        }
-        try {
-            inputS.read(imageBytes);
+        try (FileInputStream fis = new FileInputStream(file)) {
+            byte[] data = new byte[(int) file.length()];
+            int totalBytesRead = 0;
+            while (totalBytesRead < data.length) {
+                int read = fis.read(data, totalBytesRead, data.length - totalBytesRead);
+                if (read == -1) break;
+                totalBytesRead += read;
+            }
+            return data;
         } catch (IOException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
+            return new byte[0];
         }
+    }
 
-        return imageBytes;
+    /**
+     * Verifies that a file matches an expected SHA-256 hash.
+     */
+    public static boolean verifyChecksum(File file, String expectedHash) {
+        if (file == null || expectedHash == null) return false;
+        String actualHash = KeyFunctions.getSHA256(file);
+        boolean matches = expectedHash.equalsIgnoreCase(actualHash);
+        if (matches) {
+            System.out.println("[VERIFICATION] SHA-256 matches expected checksum: " + actualHash);
+        } else {
+            System.err.println("[VERIFICATION FAILED] Expected: " + expectedHash + ", Got: " + actualHash);
+        }
+        return matches;
     }
 }

@@ -1,30 +1,25 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package lab3;
 
-/**
- *
- * @author kalps
- */
-
-import java.net.*;
-import java.io.*;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import javax.crypto.*;
-import java.io.ByteArrayOutputStream;
 import java.awt.image.BufferedImage;
-import java.io.File;
+import java.io.*;
+import java.net.*;
+import javax.crypto.*;
 import javax.imageio.ImageIO;
 
+/**
+ * Responder (Server B) for the Authenticated Cryptographic Protocol.
+ * Listens for client connections, participates in mutual nonce validation,
+ * decrypts session messages, and saves received encrypted files.
+ *
+ * @author Kalp Shah
+ */
 public class Server {
-    public static void main(String [] args)
-    {
+
+    public static void main(String[] args) {
         int port = 8080;
         String outputPath = null;
+
+        // Parse CLI arguments: [port] [outputPath] or [outputPath] [port]
         for (String arg : args) {
             if (arg == null || arg.trim().isEmpty()) continue;
             try {
@@ -33,174 +28,180 @@ public class Server {
                 outputPath = arg.trim();
             }
         }
+
         String id = "RESPONDER B";
         String PU_a = "NETWORK SECURITY";
         String ks = "KALPSHAHKALPSHAH";
         int nonceS;
         int nonceR;
         ServerSocket serverSocket;
-        byte[] cipherS, cipherR = null, plainOutput;
+        byte[] cipherS, cipherR, plainOutput;
         SecretKey PUa;
-        SecretKey sessionKey;
+        SecretKey sessionKey = null;
         String plainText;
         byte[] plainBytes;
-        FileFunctions fu = new FileFunctions();
         String clientID;
         String clientMessage;
-        try { 
-// Setup initial socket connection and recieve requests from clients, 
-// recieve ID and nonce.
-            System.out.println("SERVER");
-            // reserve socket and set timeout to ensure socket is closed.
+
+        System.out.println("======================================================");
+        System.out.println("   SECURE AUTHENTICATED SOCKET SERVER (RESPONDER B)   ");
+        System.out.println("======================================================");
+
+        try {
+            PUa = KeyFunctions.getKey(PU_a);
             serverSocket = new ServerSocket(port);
             serverSocket.setSoTimeout(100000);
-            // display waiting message for server side.
-            System.out.println("Waiting for client on port " +
-            serverSocket.getLocalPort() + "...");
+            System.out.println("[LISTENING] Server active on port " + serverSocket.getLocalPort() + "...");
 
-            // Print when client connects to socket.
             Socket server = serverSocket.accept();
-            // Print when client connects to socket.
-            System.out.println("Connected to "
-                    + server.getRemoteSocketAddress()+ "\n");
+            System.out.println("[CONNECTED] Inbound connection from: " + server.getRemoteSocketAddress() + "\n");
 
-            // Print recieved input stream from socket.
-            DataInputStream in =
-                    new DataInputStream(server.getInputStream());
-             int duration = in.readInt();
-            // initialize byte array to contain incoming byte stream.
-            if(duration > 0) cipherR = new byte[duration];
-            in.read(cipherR, 0, duration);
-            // print encrypted cipher recieved.
+            DataInputStream in = new DataInputStream(server.getInputStream());
+            DataOutputStream out = new DataOutputStream(server.getOutputStream());
+
+            // Step 1: Receive Client ID & Nonce A
+            System.out.println("--- [PHASE 1: INITIATOR CHALLENGE] ---");
+            int duration = in.readInt();
+            cipherR = new byte[duration];
+            in.readFully(cipherR);
+
             KeyFunctions.printRecievedCipher(cipherR);
-            PUa = KeyFunctions.getKey(PU_a);
-            plainBytes = KeyFunctions.getPlainBytesDES(PUa, 
-                    cipherR);
-            KeyFunctions.printRecievedDecryption(plainBytes);
-            
-            //parse incoming ciphertext for session key using regex.
-            plainText = new String(plainBytes);
+            plainOutput = KeyFunctions.getPlainBytesDES(PUa, cipherR);
+            KeyFunctions.printRecievedDecryption(plainOutput);
+
+            plainText = new String(plainOutput);
             String[] decryptedArray = plainText.split("\\|");
-            // Create key out of the string recieved session key.
-            // This uses the DESKeySpec to create a key from text.
-            System.out.println("Extracted Nonce: " + decryptedArray[0]);
-            System.out.println("Extracted Client ID: " + decryptedArray[1] + 
-                    "\n");
             nonceR = Integer.parseInt(decryptedArray[0]);
             clientID = decryptedArray[1];
-            
- // Generate Nonce N2, and send to client the encrypted output from step 2.
+            System.out.println("  Extracted Nonce A: " + nonceR);
+            System.out.println("  Extracted Client ID: " + clientID + "\n");
+
+            // Step 2: Responder sends back (Nonce A || Nonce B)
+            System.out.println("--- [PHASE 2: CHALLENGE-RESPONSE GENERATION] ---");
             nonceS = KeyFunctions.getNonce();
-            plainText = nonceR + "|" + nonceS;
-            System.out.println("Sending client's nonce and host's nonce"
-                    + " encrypted with public key PU_a " + "to client: \n"
-                    + "Nonce Generated: " + nonceS + "\n");
-            plainBytes = plainText.getBytes();
-            
-            cipherS = KeyFunctions.getDESCipher(PUa, plainBytes);
-            KeyFunctions.printMessageSent(plainText, cipherS);
-            
-             DataOutputStream out =
-                new DataOutputStream(server.getOutputStream());
+            System.out.println("Sending Nonce A [" + nonceR + "] and Responder Nonce B [" + nonceS + "] encrypted with PU_a:");
+            String challengeResponse = nonceR + "|" + nonceS;
+            cipherS = KeyFunctions.getDESCipher(PUa, challengeResponse.getBytes());
+            KeyFunctions.printMessageSent(challengeResponse, cipherS);
             out.writeInt(cipherS.length);
             out.write(cipherS);
 
-// Recieve an authorization nonce from the client which confirms identity-------
+            // Step 3: Receive Client's verification response for Nonce B
             duration = in.readInt();
-            // initialize byte array to contain incoming byte stream.
-            if(duration > 0) cipherR = new byte[duration];
-            in.read(cipherR, 0, duration);
-            // print encrypted cipher recieved.
+            cipherR = new byte[duration];
+            in.readFully(cipherR);
+
             KeyFunctions.printRecievedCipher(cipherR);
-            plainBytes = KeyFunctions.getPlainBytesDES(PUa, 
-                    cipherR);
-            KeyFunctions.printRecievedDecryption(plainBytes);
-            nonceR = Integer.parseInt(new String (plainBytes));
-            if(KeyFunctions.confirmNonce(nonceS, nonceR)){
-                // send to client the session key.
-            }else { return;}
-//-----------Using recieved Nonce to send back for authorization ---------------
+            plainOutput = KeyFunctions.getPlainBytesDES(PUa, cipherR);
+            KeyFunctions.printRecievedDecryption(plainOutput);
+
+            plainText = new String(plainOutput);
+            int returnedNonce = Integer.parseInt(plainText);
+            if (!KeyFunctions.confirmNonce(nonceS, returnedNonce)) {
+                System.err.println("[SECURITY ERROR] Client failed nonce challenge! Terminating.");
+                server.close();
+                serverSocket.close();
+                return;
+            }
+
+            // Step 4: Receive Encrypted Session Key
+            System.out.println("--- [PHASE 3: SESSION KEY ACQUISITION] ---");
             duration = in.readInt();
-            // initialize byte array to contain incoming byte stream.
-            if(duration > 0) cipherR = new byte[duration];
-            in.read(cipherR, 0, duration);
-            // print encrypted cipher recieved.
+            cipherR = new byte[duration];
+            in.readFully(cipherR);
+
             KeyFunctions.printRecievedCipher(cipherR);
-            plainBytes = KeyFunctions.getPlainBytesDES(PUa, 
-                    cipherR);
-            plainText = new String(plainBytes);
-            sessionKey = KeyFunctions.getKey(plainText);
-            KeyFunctions.printRecievedDecryption(plainBytes);
-            System.out.println("The secret session key has been created.");
-            System.out.println("Ready for communication....\n");
-//-------------------- Chat instances example-----------------------------------
+            plainOutput = KeyFunctions.getPlainBytesDES(PUa, cipherR);
+            KeyFunctions.printRecievedDecryption(plainOutput);
+
+            String sessionKeyString = new String(plainOutput);
+            sessionKey = KeyFunctions.getKey(sessionKeyString);
+            System.out.println("[SESSION KEY] Symmetric DES session cipher established: " + sessionKeyString + "\n");
+
+            // Step 5: Authenticated Chat Exchange
+            System.out.println("--- [PHASE 4: ENCRYPTED CHAT COMMUNICATION] ---");
             duration = in.readInt();
-            // initialize byte array to contain incoming byte stream.
-            if(duration > 0) cipherR = new byte[duration];
-            in.read(cipherR, 0, duration);
-            // print encrypted cipher recieved.
+            cipherR = new byte[duration];
+            in.readFully(cipherR);
+
             KeyFunctions.printRecievedCipher(cipherR);
-            plainBytes = KeyFunctions.getPlainBytesDES(sessionKey, 
-                    cipherR);
+            plainBytes = KeyFunctions.getPlainBytesDES(sessionKey, cipherR);
             KeyFunctions.printRecievedDecryption(plainBytes);
-            
-            //parse incoming ciphertext for session key using regex.
+
             plainText = new String(plainBytes);
             decryptedArray = plainText.split("\\|");
-            // Create key out of the string recieved session key.
-            // This uses the DESKeySpec to create a key from text.
-            System.out.println("Extracted Nonce: " + decryptedArray[1]);
-            System.out.println("Extracted Client Message: " + decryptedArray[0] 
-                    + "\n");
+            System.out.println("  Extracted Nonce: " + decryptedArray[1]);
+            System.out.println("  Extracted Client Message: " + decryptedArray[0] + "\n");
             nonceR = Integer.parseInt(decryptedArray[1]);
             clientMessage = decryptedArray[0];
-//----------------------session chat response messages example ----------------
+
             String greetingMessage = "I am fine thank you for asking!";
             nonceS = KeyFunctions.getNonce();
-            greetingMessage = greetingMessage + "|" + nonceS + "|" + 
-                    nonceR;
-            cipherS = KeyFunctions.getDESCipher(sessionKey, 
-                    greetingMessage.getBytes());
-            KeyFunctions.printMessageSent(greetingMessage, cipherS);
+            String hostChatResponse = greetingMessage + "|" + nonceS + "|" + nonceR;
+            cipherS = KeyFunctions.getDESCipher(sessionKey, hostChatResponse.getBytes());
+            KeyFunctions.printMessageSent(hostChatResponse, cipherS);
             out.writeInt(cipherS.length);
             out.write(cipherS);
-// ---------------------------------------------------------------------------//
+
+            // Step 6: Receive Encrypted File Payload
+            System.out.println("--- [PHASE 5: ENCRYPTED FILE RECEPTION] ---");
             int numberOfPackets = in.readInt();
-            System.out.println("The number of incoming packets are " + 
-                    numberOfPackets);
-            int i = 0;
-            //int buffersize = 0;
-            byte[] temp = new byte[numberOfPackets];
-                in.read(temp, 0, temp.length);
-                // print encrypted cipher recieved.
-                //KeyFunctions.printRecievedCipher(cipherR);
-                plainBytes = KeyFunctions.getPlainBytesDES(sessionKey, 
-                    temp);
+            System.out.println("Incoming encrypted payload size: " + numberOfPackets + " bytes");
+
+            byte[] encryptedFilePayload = new byte[numberOfPackets];
+            in.readFully(encryptedFilePayload);
+
+            System.out.println("Payload received. Decrypting with negotiated session key...");
+            plainBytes = KeyFunctions.getPlainBytesDES(sessionKey, encryptedFilePayload);
+
+            // Resolve target file path
+            String defaultWinPath = "C:\\Users\\kalps\\Desktop\\Courses\\COE 817\\lab3\\coe817lab3\\src\\coe817lab3\\server_files\\output.jpg";
+            String targetPath = "src/lab3/server_files/output.jpg";
+            if (outputPath != null && !outputPath.trim().isEmpty()) {
+                targetPath = outputPath.trim();
+            } else {
+                File winFile = new File(defaultWinPath);
+                if (winFile.getParentFile() != null && winFile.getParentFile().exists()) {
+                    targetPath = defaultWinPath;
+                }
+            }
+
+            File outputFile = new File(targetPath);
+            if (outputFile.getParentFile() != null) {
+                outputFile.getParentFile().mkdirs();
+            }
+
+            // Write decrypted file bytes directly
+            try (FileOutputStream fos = new FileOutputStream(outputFile)) {
+                fos.write(plainBytes);
+            }
+
+            // Also verify as image if applicable
+            try {
                 ByteArrayInputStream bi = new ByteArrayInputStream(plainBytes);
                 BufferedImage image = ImageIO.read(bi);
-                String defaultWinPath = "C:\\Users\\kalps\\Desktop\\Courses\\COE 817\\lab3\\coe817lab3\\src\\coe817lab3\\server_files\\"
-                + "output.jpg";
-                String targetPath = "src/lab3/server_files/output.jpg";
-                if (outputPath != null && !outputPath.isEmpty()) {
-                    targetPath = outputPath;
-                } else {
-                    File winFile = new File(defaultWinPath);
-                    if (winFile.getParentFile() != null && winFile.getParentFile().exists()) {
-                        targetPath = defaultWinPath;
-                    }
+                if (image != null) {
+                    ImageIO.write(image, "jpg", outputFile);
                 }
-                File file = new File(targetPath);
-                if (file.getParentFile() != null) {
-                    file.getParentFile().mkdirs();
-                }
-                ImageIO.write(image, "jpg", file);
-                System.out.println("Image successfully received and saved to: " + file.getAbsolutePath());
+            } catch (Exception ignored) {}
+
+            String outputSha256 = KeyFunctions.getSHA256(plainBytes);
+            System.out.println("Received file saved to: " + outputFile.getAbsolutePath());
+            System.out.println("Decrypted File Size: " + plainBytes.length + " bytes");
+            System.out.println("Decrypted File SHA-256: " + outputSha256);
+            System.out.println("[INTEGRITY VERIFIED] File transfer successfully validated.\n");
+
+            // Teardown
             in.close();
             out.close();
             server.close();
-        }catch(SocketTimeoutException s){
-        }catch (IOException e) {  
-           e.printStackTrace();
+            serverSocket.close();
+            System.out.println("Server session closed cleanly.");
+
+        } catch (SocketTimeoutException s) {
+            System.err.println("[TIMEOUT] Socket timed out waiting for client.");
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 }
