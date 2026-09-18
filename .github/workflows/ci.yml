@@ -1,0 +1,39 @@
+name: CI / Test Suite
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Cryptographic Integrity Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Compile and Execute Test Suite
+        run: |
+          mkdir -p bin
+          javac -d bin src/lab3/*.java test/lab3/*.java
+          java -cp bin lab3.CryptoTestSuite
+
+  ci-success:
+    name: CI Test Suite Pass
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate Check
+        run: echo "All cryptographic tests passed."
